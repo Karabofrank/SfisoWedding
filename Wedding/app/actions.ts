@@ -54,10 +54,10 @@ export async function submitRSVP(formData: FormData) {
 
   // look up the guest by name in Firestore
   const guestsRef = getDb().collection("guests");
-  const snapshot = await guestsRef.where("name", "==", guestName).limit(1).get();
+  const snapshot: any = await guestsRef.where("name", "==", guestName).limit(1).get();
 
   if (!snapshot.empty) {
-    const doc = snapshot.docs[0];
+    const doc: any = snapshot.docs[0];
     await doc.ref.update({
       attending,
       additional_guests: additionalGuests,
@@ -88,7 +88,7 @@ export async function getMyRSVP() {
   if (!guestName) return null;
 
   const guestsRef = getDb().collection("guests");
-  const snapshot = await guestsRef.where("name", "==", guestName).limit(1).get();
+  const snapshot: any = await guestsRef.where("name", "==", guestName).limit(1).get();
   if (snapshot.empty) return null;
   return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
 }
@@ -134,5 +134,5 @@ export async function getPhotos() {
     .orderBy("created_at", "desc")
     .get();
 
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  return snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
 }
