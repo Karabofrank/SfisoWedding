@@ -19,7 +19,9 @@ help you continue development and deploy to Vercel.
 ## 📦 Environment variables
 
 Create a `.env.local` file (or configure these in Vercel) with the following
-values:
+values. An example file named `.env.example` is included in the repo; copy it
+to `.env.local` and fill in your real credentials. The `.env.*` files are
+ignored by Git for security.
 
 ```env
 # Admin SDK - paste the JSON object from your service account
