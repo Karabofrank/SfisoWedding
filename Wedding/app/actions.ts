@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { WEDDING } from "@/lib/constants";
-import { createClient } from "@/lib/supabase/server";
+import { getDb, getBucket, serverTimestamp } from "@/lib/firebase/admin";
 
 export async function loginWithInviteCode(formData: FormData) {
   const code = formData.get("inviteCode") as string;
@@ -52,46 +52,34 @@ export async function submitRSVP(formData: FormData) {
   const attendingTraditional = formData.get("attendingTraditional") === "on";
   const message = (formData.get("message") as string)?.trim() || null;
 
-  const supabase = await createClient();
+  // look up the guest by name in Firestore
+  const guestsRef = getDb().collection("guests");
+  const snapshot = await guestsRef.where("name", "==", guestName).limit(1).get();
 
-  // Check if guest already RSVP'd
-  const { data: existing } = await supabase
-    .from("guests")
-    .select("id")
-    .eq("name", guestName)
-    .single();
+  if (!snapshot.empty) {
+    const doc = snapshot.docs[0];
+    await doc.ref.update({
+      attending,
+      additional_guests: additionalGuests,
+      attending_ceremony: attendingCeremony,
+      attending_traditional: attendingTraditional,
+      message,
+      updated_at: serverTimestamp(),
+    });
 
-  if (existing) {
-    const { error } = await supabase
-      .from("guests")
-      .update({
-        attending,
-        additional_guests: additionalGuests,
-        attending_ceremony: attendingCeremony,
-        attending_traditional: attendingTraditional,
-        message,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", existing.id);
-
-    if (error) {
-      return { error: "Failed to update RSVP. Please try again." };
-    }
     return { success: true, updated: true };
   }
 
-  const { error } = await supabase.from("guests").insert({
+  await guestsRef.add({
     name: guestName,
     attending,
     additional_guests: additionalGuests,
     attending_ceremony: attendingCeremony,
     attending_traditional: attendingTraditional,
     message,
+    created_at: serverTimestamp(),
   });
 
-  if (error) {
-    return { error: "Failed to submit RSVP. Please try again." };
-  }
   return { success: true, updated: false };
 }
 
@@ -99,14 +87,10 @@ export async function getMyRSVP() {
   const guestName = await getGuestName();
   if (!guestName) return null;
 
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("guests")
-    .select("*")
-    .eq("name", guestName)
-    .single();
-
-  return data;
+  const guestsRef = getDb().collection("guests");
+  const snapshot = await guestsRef.where("name", "==", guestName).limit(1).get();
+  if (snapshot.empty) return null;
+  return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
 }
 
 export async function uploadPhoto(formData: FormData) {
@@ -122,42 +106,33 @@ export async function uploadPhoto(formData: FormData) {
     return { error: "Please select a file to upload." };
   }
 
-  const supabase = await createClient();
   const fileName = `${Date.now()}-${file.name}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const remotePath = `wedding-photos/${fileName}`;
 
-  const { error: uploadError } = await supabase.storage
-    .from("wedding-photos")
-    .upload(fileName, file);
+  const fileRef = getBucket().file(remotePath);
+  await fileRef.save(buffer, { metadata: { contentType: file.type } });
+  // make public so guests can view it without auth
+  await fileRef.makePublic();
 
-  if (uploadError) {
-    return { error: "Failed to upload photo. Please try again." };
-  }
+  const publicUrl = `https://storage.googleapis.com/${process.env.FIREBASE_STORAGE_BUCKET}/${remotePath}`;
 
-  const { data: urlData } = supabase.storage
-    .from("wedding-photos")
-    .getPublicUrl(fileName);
-
-  const { error: dbError } = await supabase.from("photos").insert({
+  await getDb().collection("photos").add({
     file_name: fileName,
-    file_url: urlData.publicUrl,
+    file_url: publicUrl,
     uploaded_by: guestName,
     caption,
+    created_at: serverTimestamp(),
   });
 
-  if (dbError) {
-    return { error: "Photo uploaded but failed to save metadata." };
-  }
-
-  return { success: true, url: urlData.publicUrl };
+  return { success: true, url: publicUrl };
 }
 
 export async function getPhotos() {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("photos")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const snapshot = await getDb()
+    .collection("photos")
+    .orderBy("created_at", "desc")
+    .get();
 
-  if (error) return [];
-  return data;
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
