@@ -29,7 +29,13 @@ function getApp() {
 
   let options: admin.AppOptions = {};
   try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    // Handle both raw JSON and base64-encoded credentials
+    let serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (!serviceAccountJson.startsWith('{')) {
+      // Assume it's base64-encoded; decode it first
+      serviceAccountJson = Buffer.from(serviceAccountJson, 'base64').toString('utf-8');
+    }
+    const serviceAccount = JSON.parse(serviceAccountJson);
     options.credential = admin.credential.cert(serviceAccount as any);
   } catch (err) {
     console.warn('Failed to parse FIREBASE_SERVICE_ACCOUNT:', err);

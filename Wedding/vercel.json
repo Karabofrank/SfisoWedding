@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "package.json", "use": "@vercel/next" }
+  ],
+  "github": {
+    "silent": false
+  },
+  "build": {
+    "env": {
+      "FIREBASE_SERVICE_ACCOUNT": "@firebase-service-account",
+      "FIREBASE_STORAGE_BUCKET": "@firebase-storage-bucket",
+      "FIREBASE_PROJECT_ID": "@firebase-project-id"
+    }
+  }
+}
