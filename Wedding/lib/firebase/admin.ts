@@ -74,7 +74,7 @@ export function getDb() {
     });
     return { collection: stubCollection } as any;
   }
-  return ensureApp().firestore();
+  return app.firestore('sifisomapula');
 }
 
 export function getBucket() {
